@@ -46,7 +46,7 @@ const (
 	cpuTypeUnknown = -1
 )
 
-const acrnDevice = "/dev/acrn_vhm"
+const acrnDevice = "/dev/acrn_hsm"
 
 // ioctl_ACRN_CREATE_VM is the IOCTL to create VM in ACRN.
 // Current Linux mainstream kernel doesn't have support for ACRN.
@@ -54,18 +54,31 @@ const acrnDevice = "/dev/acrn_vhm"
 // Until the support is available, directly use the value instead
 // of macros.
 //https://github.com/kata-containers/runtime/issues/1784
-const ioctl_ACRN_CREATE_VM = 0x43000010  //nolint
-const ioctl_ACRN_DESTROY_VM = 0x43000011 //nolint
+const ioctl_ACRN_CREATE_VM = 0xC030A210 //nolint
+const ioctl_ACRN_PAUSE_VM = 0xA213      //nolint
+const ioctl_ACRN_DESTROY_VM = 0xA211    //nolint
 
-type acrn_create_vm struct { //nolint
-	vmid      uint16 //nolint
-	reserved0 uint16 //nolint
-	vcpu_num  uint16 //nolint
-	reserved1 uint16 //nolint
-	uuid      [16]uint8
-	vm_flag   uint64    //nolint
-	req_buf   uint64    //nolint
-	reserved2 [16]uint8 //nolint
+type acrn_vm_creation struct { //nolint
+	vmid         uint16 //nolint
+	reserved0    uint16 //nolint
+	vcpu_num     uint16 //nolint
+	reserved1    uint16 //nolint
+	name         [16]uint8
+	vm_flag      uint64 //nolint
+	ioreq_buf    uint64 //nolint
+	cpu_affinity uint64 //nolint
+}
+
+var io_request_page [4096]byte
+
+type acrn_io_request struct {
+	io_type            uint64
+	completion_polling uint32
+	reserved0          [14]uint32
+	data               [8]uint64
+	reserved1          uint32
+	kernel_handled     int32
+	processed          uint32
 }
 
 // cpuType save the CPU type
@@ -245,19 +258,10 @@ func acrnIsUsable() error {
 	defer syscall.Close(f)
 	kataLog.WithField("device", acrnDevice).Info("device available")
 
-	acrnInst := vc.Acrn{}
-	uuidStr, err := acrnInst.GetNextAvailableUUID()
-	if err != nil {
-		return err
-	}
-
-	uuid, err := acrnInst.GetACRNUUIDBytes(uuidStr)
-	if err != nil {
-		return fmt.Errorf("Converting UUID str to bytes failed, Err:%s", err)
-	}
-
-	var createVM acrn_create_vm
-	createVM.uuid = uuid
+	var createVM acrn_vm_creation
+	copy(createVM.name[:], "KataACRNVM")
+	ioreq_buf := (*acrn_io_request)(unsafe.Pointer(&io_request_page))
+	createVM.ioreq_buf = uint64(uintptr(unsafe.Pointer(ioreq_buf)))
 
 	ret, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
 		uintptr(f),
@@ -268,9 +272,22 @@ func acrnIsUsable() error {
 			kataLog.WithField("reason", "another hypervisor running").Error("cannot create VM")
 		}
 		kataLog.WithFields(logrus.Fields{
+			"ret":     ret,
+			"errno":   errno,
+			"VM_name": createVM.name,
+		}).Info("Create VM Error")
+		return errno
+	}
+
+	ret, _, errno = syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(f),
+		uintptr(ioctl_ACRN_PAUSE_VM),
+		0)
+	if ret != 0 || errno != 0 {
+		kataLog.WithFields(logrus.Fields{
 			"ret":   ret,
 			"errno": errno,
-		}).Info("Create VM Error")
+		}).Info("PAUSE VM Error")
 		return errno
 	}
 
