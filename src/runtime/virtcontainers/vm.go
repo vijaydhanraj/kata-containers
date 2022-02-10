@@ -111,6 +111,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		}
 	}()
 
+	virtLog.Error("NewVM: CreateVM function called")
 	if err = hypervisor.CreateVM(ctx, id, NetworkNamespace{}, &config.HypervisorConfig); err != nil {
 		return nil, err
 	}

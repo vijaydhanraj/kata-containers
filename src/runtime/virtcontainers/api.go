@@ -88,6 +88,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 	}
 
 	// Start the VM
+	s.Logger().Error("createSandboxFromConfig: s.startVM called")
 	if err = s.startVM(ctx); err != nil {
 		return nil, err
 	}

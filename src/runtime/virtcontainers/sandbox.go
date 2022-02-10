@@ -558,14 +558,18 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	// store doesn't require hypervisor to be stored immediately
+	kernelAssetPath, _ := sandboxConfig.HypervisorConfig.KernelAssetPath()
+	s.Logger().Errorf("newSandbox: CreateVM function called: KernelPath=%s", kernelAssetPath)
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
 
+	s.Logger().Error("newSandbox: s.agent.init function called")
 	if s.disableVMShutdown, err = s.agent.init(ctx, s, sandboxConfig.AgentConfig); err != nil {
 		return nil, err
 	}
 
+	s.Logger().Error("newSandbox: **returned nil**")
 	return s, nil
 }
 
@@ -957,6 +961,7 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 	case consoleProtoUnix:
 		cw.conn, err = net.Dial("unix", cw.consoleURL)
 		if err != nil {
+			s.Logger().Errorf("consoleWatcher start: err = %s", err.Error())
 			return err
 		}
 		scanner = bufio.NewScanner(cw.conn)
@@ -975,12 +980,12 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 				"console-url":      cw.consoleURL,
 				"sandbox":          s.id,
 				"vmconsole":        scanner.Text(),
-			}).Debug("reading guest console")
+			}).Error("reading guest console")
 		}
 
 		if err := scanner.Err(); err != nil {
 			if err == io.EOF {
-				s.Logger().Info("console watcher quits")
+				s.Logger().Error("console watcher quits")
 			} else {
 				s.Logger().WithError(err).WithFields(logrus.Fields{
 					"console-protocol": cw.proto,
@@ -1126,7 +1131,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
-	s.Logger().Info("Starting VM")
+	s.Logger().Error("Starting VM")
 
 	if s.config.HypervisorConfig.Debug {
 		// create console watcher
@@ -1157,6 +1162,7 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 			return vm.assignSandbox(s)
 		}
 
+		s.Logger().Error("startVM: s.hypervisor.StartVM called")
 		return s.hypervisor.StartVM(ctx, VmStartTimeout)
 	}); err != nil {
 		return err
@@ -1167,17 +1173,19 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	if s.factory != nil {
 		endpoints, err := s.network.Add(ctx, &s.config.NetworkConfig, s, true)
 		if err != nil {
+			s.Logger().Errorf("startVM: s.network.Add failed: %s", err.Error())
 			return err
 		}
 
 		s.networkNS.Endpoints = endpoints
 	}
 
-	s.Logger().Info("VM started")
+	s.Logger().Error("VM started")
 
 	if s.cw != nil {
-		s.Logger().Debug("console watcher starts")
+		s.Logger().Error("console watcher starts")
 		if err := s.cw.start(s); err != nil {
+			s.Logger().Errorf("startVM: console watcher start failed: %s", err.Error())
 			s.cw.stop()
 			return err
 		}
@@ -1187,11 +1195,13 @@ func (s *Sandbox) startVM(ctx context.Context) (err error) {
 	// we want to guarantee that it is manageable.
 	// For that we need to ask the agent to start the
 	// sandbox inside the VM.
+	s.Logger().Error("Calling s.agent.startSandbox")
 	if err := s.agent.startSandbox(ctx, s); err != nil {
+		s.Logger().Errorf("startVM: s.agent.startSandbox failed: %s", err.Error())
 		return err
 	}
 
-	s.Logger().Info("Agent started in the sandbox")
+	s.Logger().Error("Agent started in the sandbox")
 
 	defer func() {
 		if err != nil {

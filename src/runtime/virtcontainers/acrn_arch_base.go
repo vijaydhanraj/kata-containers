@@ -138,13 +138,6 @@ var acrnKernelParams = []Param{
 	{"console", "hvc0"},
 	{"log_buf_len", "16M"},
 	{"consoleblank", "0"},
-	{"iommu", "off"},
-	{"i915.avail_planes_per_pipe", "0x070F00"},
-	{"i915.enable_hangcheck", "0"},
-	{"i915.nuclear_pageflip", "1"},
-	{"i915.enable_guc_loading", "0"},
-	{"i915.enable_guc_submission", "0"},
-	{"i915.enable_guc", "0"},
 }
 
 // Device is the acrn device interface.
@@ -289,9 +282,6 @@ type Config struct {
 
 	// Name is the acrn guest name
 	Name string
-
-	// UUID is the acrn process UUID.
-	UUID string
 
 	// Kernel is the guest kernel configuration.
 	Kernel Kernel
@@ -522,7 +512,8 @@ func (lpcDev LPCDevice) AcrnParams(slot int, config *Config) []string {
 
 func (config *Config) appendName() {
 	if config.Name != "" {
-		config.acrnParams = append(config.acrnParams, config.Name)
+		//TODO: name of the VM should be generated dynamically
+		config.acrnParams = append(config.acrnParams, "POST_STD_VM3")
 	}
 }
 
@@ -543,13 +534,6 @@ func (config *Config) appendDevices() {
 	}
 }
 
-func (config *Config) appendUUID() {
-	if config.UUID != "" {
-		config.acrnParams = append(config.acrnParams, "-U")
-		config.acrnParams = append(config.acrnParams, config.UUID)
-	}
-}
-
 func (config *Config) appendACPI() {
 	if config.ACPIVirt {
 		config.acrnParams = append(config.acrnParams, "-A")
@@ -567,6 +551,9 @@ func (config *Config) appendKernel() {
 	if config.Kernel.Path == "" {
 		return
 	}
+	//TODO: CPU affinity should be set dynamically
+	config.acrnParams = append(config.acrnParams, "--cpu_affinity")
+	config.acrnParams = append(config.acrnParams, "0,1")
 	config.acrnParams = append(config.acrnParams, "-k")
 	config.acrnParams = append(config.acrnParams, config.Kernel.Path)
 
@@ -584,7 +571,6 @@ func (config *Config) appendKernel() {
 // This function writes its log output via logger parameter.
 func LaunchAcrn(config Config, logger *logrus.Entry) (int, string, error) {
 	baselogger = logger
-	config.appendUUID()
 	config.appendACPI()
 	config.appendMemory()
 	config.appendDevices()
@@ -618,7 +604,7 @@ func LaunchCustomAcrn(ctx context.Context, path string, params []string,
 	logger.WithFields(logrus.Fields{
 		"Path":   path,
 		"Params": params,
-	}).Info("launching acrn with:")
+	}).Error("launching acrn with:")
 
 	err := cmd.Start()
 	if err != nil {
