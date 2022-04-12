@@ -52,6 +52,9 @@ type acrnArch interface {
 	// appendSocket appends a socket to devices
 	appendSocket(devices []Device, socket types.Socket) []Device
 
+	// appendVSock appends a vsock PCI to devices
+	appendVSock(devices []Device, vsock types.VSock) []Device
+
 	// appendNetwork appends a endpoint device to devices
 	appendNetwork(devices []Device, endpoint Endpoint) []Device
 
@@ -191,6 +194,12 @@ type ConsoleDevice struct {
 
 	// PortType marks the port as serial or console port (@)
 	PortType BEPortType
+}
+
+// VSOCKDevice represents a AF_VSOCK socket.
+type VSOCKDevice struct {
+	//Guest CID assigned by Host.
+	ContextID uint64
 }
 
 // NetDeviceType is a acrn networking device type.
@@ -416,6 +425,33 @@ func (netdev NetDevice) AcrnNetdevParam() []string {
 	}
 
 	return deviceParams
+}
+
+const (
+	// MinimalGuestCID is the smallest valid context ID for a guest.
+	MinimalGuestCID uint64 = 3
+
+	// MaxGuestCID is the largest valid context ID for a guest.
+	MaxGuestCID uint64 = 1<<32 - 1
+)
+
+// Valid returns true if the VSOCKDevice structure is valid and complete.
+func (vsock VSOCKDevice) Valid() bool {
+	if vsock.ContextID < MinimalGuestCID || vsock.ContextID > MaxGuestCID {
+		return false
+	}
+
+	return true
+}
+
+// AcrnParams returns the acrn parameters built out of this vsock device.
+func (vsock VSOCKDevice) AcrnParams(slot int, config *Config) []string {
+	var acrnParams []string
+
+	acrnParams = append(acrnParams, "-s")
+	acrnParams = append(acrnParams, fmt.Sprintf("%d,vhost-vsock,guest_cid=%d", slot, vsock.ContextID))
+
+	return acrnParams
 }
 
 // Valid returns true if the NetDevice structure is valid and complete.
@@ -676,6 +712,15 @@ func (a *acrnArchBase) appendSocket(devices []Device, socket types.Socket) []Dev
 	}
 
 	devices = append(devices, serailsocket)
+	return devices
+}
+
+func (a *acrnArchBase) appendVSock(devices []Device, vsock types.VSock) []Device {
+	vmsock := VSOCKDevice{
+		ContextID: vsock.ContextID,
+	}
+
+	devices = append(devices, vmsock)
 	return devices
 }
 

@@ -503,8 +503,10 @@ func (a *Acrn) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 	case types.Socket:
 		a.acrnConfig.Devices = a.arch.appendSocket(a.acrnConfig.Devices, v)
 	case types.VSock:
-		// Not supported. return success
-		err = nil
+		var cid = v.ContextID
+		var Port = v.Port
+		a.Logger().WithField("VSOCK device", devInfo).Infof("CID = %ld, Port= %d", cid, Port)
+		a.acrnConfig.Devices = a.arch.appendVSock(a.acrnConfig.Devices, v)
 	case Endpoint:
 		a.acrnConfig.Devices = a.arch.appendNetwork(a.acrnConfig.Devices, v)
 	case config.BlockDrive:
