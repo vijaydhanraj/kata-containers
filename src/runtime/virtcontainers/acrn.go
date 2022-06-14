@@ -617,7 +617,14 @@ func (a *Acrn) Check() error {
 }
 
 func (a *Acrn) GenerateSocket(id string) (interface{}, error) {
-	return generateVMSocket(id, a.store.RunVMStoragePath())
+	socket, err := generateVMSocket(id, a.store.RunVMStoragePath())
+	if err != nil {
+		return "", err
+	}
+	vsock, _ := socket.(types.VSock)
+	vsock.VhostFd.Close()
+
+	return socket, err
 }
 
 func (a *Acrn) IsRateLimiterBuiltin() bool {
