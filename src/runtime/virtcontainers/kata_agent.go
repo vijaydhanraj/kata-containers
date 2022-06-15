@@ -714,11 +714,13 @@ func (k *kataAgent) listRoutes(ctx context.Context) ([]*pbTypes.Route, error) {
 }
 
 func (k *kataAgent) getAgentURL() (string, error) {
+	k.Logger().Error("Calling getAgentURL")
 	return k.agentURL()
 }
 
 func (k *kataAgent) setAgentURL() error {
 	var err error
+	k.Logger().Error("Calling setAgentURL")
 	if k.state.URL, err = k.agentURL(); err != nil {
 		return err
 	}
@@ -1310,6 +1312,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// This is the guest absolute root path for that container.
 	rootPathParent := filepath.Join(kataGuestSharedDir(), c.id)
 	rootPath := filepath.Join(rootPathParent, c.rootfsSuffix)
+	k.Logger().Errorf("rootPathParent = %v, rootPath = %v", rootPathParent, rootPath)
 
 	// In case the container creation fails, the following defer statement
 	// takes care of rolling back actions previously performed.
@@ -1324,6 +1327,8 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// the block device for the rootfs, which us utilized for mounting in the guest. This'll be handled
 	// already for non-block based rootfs
 	if rootfs, err = k.buildContainerRootfs(ctx, sandbox, c, rootPathParent); err != nil {
+		k.Logger().Errorf("buildContainerRootfs: rootPathParent = %v, err = %v, rootfs = %v",
+			rootPathParent, err, rootfs)
 		return nil, err
 	}
 
@@ -1337,6 +1342,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	ociSpec := c.GetPatchedOCISpec()
 	if ociSpec == nil {
+		k.Logger().Errorf("GetPatchedOCISpec: errorMissingOCISpec= %v", errorMissingOCISpec)
 		return nil, errorMissingOCISpec
 	}
 
@@ -1346,6 +1352,8 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	shareStorages, err := c.mountSharedDirMounts(ctx, sharedDirMounts, ignoredMounts)
 	if err != nil {
+		k.Logger().Errorf("mountSharedDirMounts: sharedDirMounts= %v, ignoredMounts = %v, shareStorages =%v, err = %v",
+			sharedDirMounts, ignoredMounts, shareStorages, err)
 		return nil, err
 	}
 	ctrStorages = append(ctrStorages, shareStorages...)
@@ -1354,6 +1362,8 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	epheStorages, err := k.handleEphemeralStorage(ociSpec.Mounts)
 	if err != nil {
+		k.Logger().Errorf("handleEphemeralStorage: ociSpec.Mounts= %v, epheStorages = %v, err = %v",
+			ociSpec.Mounts, epheStorages, err)
 		return nil, err
 	}
 
@@ -1361,6 +1371,8 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	localStorages, err := k.handleLocalStorage(ociSpec.Mounts, sandbox.id, c.rootfsSuffix)
 	if err != nil {
+		k.Logger().Errorf("handleLocalStorage: ociSpec.Mounts= %v, sandbox.id = %v, c.rootfsSuffix = %v, localStorages = %v, err = %v",
+			ociSpec.Mounts, sandbox.id, c.rootfsSuffix, localStorages, err)
 		return nil, err
 	}
 
@@ -1369,11 +1381,15 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// We replace all OCI mount sources that match our container mount
 	// with the right source path (The guest one).
 	if err = k.replaceOCIMountSource(ociSpec, sharedDirMounts); err != nil {
+		k.Logger().Errorf("replaceOCIMountSource: ociSpec = %v, sharedDirMounts = %v, err = %v",
+			ociSpec, sharedDirMounts, err)
 		return nil, err
 	}
 
 	// Remove all mounts that should be ignored from the spec
 	if err = k.removeIgnoredOCIMount(ociSpec, ignoredMounts); err != nil {
+		k.Logger().Errorf("removeIgnoredOCIMount: ociSpec = %v, ignoredMounts = %v, err = %v",
+			ociSpec, ignoredMounts, err)
 		return nil, err
 	}
 
@@ -1386,10 +1402,14 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// after devices passed with --device are handled.
 	volumeStorages, err := k.handleBlockVolumes(c)
 	if err != nil {
+		k.Logger().Errorf("handleBlockVolumes: volumeStorages = %v, err = %v",
+			volumeStorages, err)
 		return nil, err
 	}
 
 	if err := k.replaceOCIMountsForStorages(ociSpec, volumeStorages); err != nil {
+		k.Logger().Errorf("replaceOCIMountsForStorages: ociSpec = %v, volumeStorages = %v, err = %v",
+			ociSpec, volumeStorages, err)
 		return nil, err
 	}
 
@@ -1397,6 +1417,8 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	grpcSpec, err := grpc.OCItoGRPC(ociSpec)
 	if err != nil {
+		k.Logger().Errorf("OCItoGRPC: ociSpec = %v, grpcSpec = %v, err = %v",
+			ociSpec, grpcSpec, err)
 		return nil, err
 	}
 
@@ -1425,6 +1447,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	}
 
 	if _, err = k.sendReq(ctx, req); err != nil {
+		k.Logger().Errorf("sendReq: ctx = %v, req = %v, err = %v", ctx, req, err)
 		return nil, err
 	}
 
@@ -1835,7 +1858,7 @@ func (k *kataAgent) connect(ctx context.Context) error {
 		return nil
 	}
 
-	k.Logger().WithField("url", k.state.URL).Info("New client")
+	k.Logger().Errorf("New client: k.state.URL = %v, k.dialTimout = %v", k.state.URL, k.dialTimout)
 	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.dialTimout)
 	if err != nil {
 		k.dead = true

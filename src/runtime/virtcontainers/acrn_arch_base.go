@@ -449,7 +449,7 @@ func (vsock VSOCKDevice) AcrnParams(slot int, config *Config) []string {
 	var acrnParams []string
 
 	acrnParams = append(acrnParams, "-s")
-	acrnParams = append(acrnParams, fmt.Sprintf("%d,vhost-vsock,guest_cid=%d", slot, vsock.ContextID))
+	acrnParams = append(acrnParams, fmt.Sprintf("%d,vhost-vsock,guest_cid=%d", slot, uint32(vsock.ContextID)))
 
 	return acrnParams
 }

@@ -347,7 +347,7 @@ func (a *Acrn) StartVM(ctx context.Context, timeoutSecs int) error {
 	}
 
 	vmPath := filepath.Join(a.store.RunVMStoragePath(), a.id)
-	a.Logger().Error("StartVM: vmPath = %s", vmPath)
+	a.Logger().Errorf("StartVM: vmPath = %v", vmPath)
 	err := os.MkdirAll(vmPath, DirMode)
 	if err != nil {
 		return err
@@ -435,17 +435,18 @@ func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 	//Explicitly set PCIPath to NULL, so that VirtPath can be used
 	drive.PCIPath = vcTypes.PciPath{}
 
-	args := []string{"blkrescan", a.acrnConfig.Name, fmt.Sprintf("%d,%s", slot, drive.File)}
+	args := []string{"blkrescan", "POST_STD_VM3" /*a.acrnConfig.Name*/, fmt.Sprintf("%d,%s", slot, drive.File)}
 
-	a.Logger().WithFields(logrus.Fields{
+	/*a.Logger().WithFields(logrus.Fields{
 		"drive": drive,
 		"path":  a.config.HypervisorCtlPath,
-	}).Info("updateBlockDevice with acrnctl path")
+	}).Info("updateBlockDevice with acrnctl path")*/
 	cmd := exec.Command(a.config.HypervisorCtlPath, args...)
 	if err := cmd.Run(); err != nil {
 		a.Logger().WithError(err).Error("updating Block device with newFile path")
 	}
-
+	a.Logger().Errorf("updateBlockDevice: a.acrnConfig.Name = %v, slot = %v, drive.File= %v, err = %v",
+		"POST_STD_VM3" /*a.acrnConfig.Name*/, slot, drive.File, err)
 	return err
 }
 
@@ -505,8 +506,10 @@ func (a *Acrn) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 	case types.VSock:
 		var cid = v.ContextID
 		var Port = v.Port
-		a.Logger().WithField("VSOCK device", devInfo).Infof("CID = %ld, Port= %d", cid, Port)
+		a.Logger().Errorf("AddDevice: VSOCK device: CID = %v, Port= %v", cid, Port)
 		a.acrnConfig.Devices = a.arch.appendVSock(a.acrnConfig.Devices, v)
+		//stack := debug.Stack()
+		//a.Logger().Errorf("ACRN's AddDevice stack: %v", string(stack))
 	case Endpoint:
 		a.acrnConfig.Devices = a.arch.appendNetwork(a.acrnConfig.Devices, v)
 	case config.BlockDrive:

@@ -891,7 +891,9 @@ func generateVMSocket(id string, vmStogarePath string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	virtLog.Errorf("generateVMSocket CID =%v", contextID)
+	//contextID = 2147483647
+	//contextID = 3142685259
 	return types.VSock{
 		VhostFd:   vhostFd,
 		ContextID: contextID,
