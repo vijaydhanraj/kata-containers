@@ -127,6 +127,8 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
 }
 
 async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    // Enable backtrace on panic *and* any error by default.
+    // This is done to get a backtrace if early setup fails.
     env::set_var("RUST_BACKTRACE", "full");
 
     // List of tasks that need to be stopped for a clean shutdown

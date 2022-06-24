@@ -1255,6 +1255,7 @@ func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, 
 			k.Logger().Error("malformed block drive")
 			return nil, fmt.Errorf("malformed block drive")
 		}
+		k.Logger().Debugf("kataAgent.buildContainerRootfs():blockDrive = %+v", blockDrive)
 		switch {
 		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
 			rootfs.Driver = kataMmioBlkDevType
@@ -1262,9 +1263,11 @@ func (k *kataAgent) buildContainerRootfs(ctx context.Context, sandbox *Sandbox, 
 		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
 			rootfs.Driver = kataBlkCCWDevType
 			rootfs.Source = blockDrive.DevNo
+			k.Logger().Debugf("kataAgent.buildContainerRootfs(): BlockDeviceDriver == config.VirtioBlockCCW")
 		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
 			rootfs.Driver = kataBlkDevType
-			rootfs.Source = blockDrive.PCIPath.String()
+			rootfs.Source = blockDrive.VirtPath
+			k.Logger().Debugf("kataAgent.buildContainerRootfs(): BlockDeviceDriver == config.VirtioBlock")
 		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
 			rootfs.Driver = kataSCSIDevType
 			rootfs.Source = blockDrive.SCSIAddr
@@ -1305,6 +1308,8 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "createContainer", kataAgentTracingTags)
 	defer span.End()
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): sb: %+v, container: %+v", sandbox, c)
+
 	var ctrStorages []*grpc.Storage
 	var ctrDevices []*grpc.Device
 	var rootfs *grpc.Storage
@@ -1331,7 +1336,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 			rootPathParent, err, rootfs)
 		return nil, err
 	}
-
+	k.Logger().Debugf("FIXME: kataAgent.createContainer():rootfs storage: %+v", rootfs)
 	if rootfs != nil {
 		// Add rootfs to the list of container storage.
 		// We only need to do this for block based rootfs, as we
@@ -1346,6 +1351,8 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, errorMissingOCISpec
 	}
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): original OCI spec: %+v", ociSpec)
+
 	// Handle container mounts
 	sharedDirMounts := make(map[string]Mount)
 	ignoredMounts := make(map[string]Mount)
@@ -1358,7 +1365,11 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	}
 	ctrStorages = append(ctrStorages, shareStorages...)
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): ociSpec.Mounts: %+v", ociSpec.Mounts)
+
 	k.handleShm(ociSpec.Mounts, sandbox)
+
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling k.handleEphemeralStorage")
 
 	epheStorages, err := k.handleEphemeralStorage(ociSpec.Mounts)
 	if err != nil {
@@ -1367,8 +1378,11 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, err
 	}
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called k.handleEphemeralStorage = %+v", epheStorages)
+
 	ctrStorages = append(ctrStorages, epheStorages...)
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling k.handleLocalStorage")
 	localStorages, err := k.handleLocalStorage(ociSpec.Mounts, sandbox.id, c.rootfsSuffix)
 	if err != nil {
 		k.Logger().Errorf("handleLocalStorage: ociSpec.Mounts= %v, sandbox.id = %v, c.rootfsSuffix = %v, localStorages = %v, err = %v",
@@ -1376,22 +1390,29 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, err
 	}
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called k.handleLocalStorage = %+v", localStorages)
+
 	ctrStorages = append(ctrStorages, localStorages...)
 
 	// We replace all OCI mount sources that match our container mount
 	// with the right source path (The guest one).
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling k.replaceOCIMountSource")
 	if err = k.replaceOCIMountSource(ociSpec, sharedDirMounts); err != nil {
 		k.Logger().Errorf("replaceOCIMountSource: ociSpec = %v, sharedDirMounts = %v, err = %v",
 			ociSpec, sharedDirMounts, err)
 		return nil, err
 	}
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called k.replaceOCIMountSource")
 
 	// Remove all mounts that should be ignored from the spec
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling k.removeIgnoredOCIMount")
 	if err = k.removeIgnoredOCIMount(ociSpec, ignoredMounts); err != nil {
 		k.Logger().Errorf("removeIgnoredOCIMount: ociSpec = %v, ignoredMounts = %v, err = %v",
 			ociSpec, ignoredMounts, err)
 		return nil, err
 	}
+
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called k.removeIgnoredOCIMount")
 
 	// Append container devices for block devices passed with --device.
 	ctrDevices = k.appendDevices(ctrDevices, c)
@@ -1400,32 +1421,41 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// Note this call modifies the list of container devices to make sure
 	// all hotplugged devices are unplugged, so this needs be done
 	// after devices passed with --device are handled.
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling k.handleBlockVolumes")
 	volumeStorages, err := k.handleBlockVolumes(c)
 	if err != nil {
 		k.Logger().Errorf("handleBlockVolumes: volumeStorages = %v, err = %v",
 			volumeStorages, err)
 		return nil, err
 	}
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called k.handleBlockVolumes = %+v", volumeStorages)
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling k.replaceOCIMountsForStorages")
 	if err := k.replaceOCIMountsForStorages(ociSpec, volumeStorages); err != nil {
 		k.Logger().Errorf("replaceOCIMountsForStorages: ociSpec = %v, volumeStorages = %v, err = %v",
 			ociSpec, volumeStorages, err)
 		return nil, err
 	}
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called k.replaceOCIMountsForStorages")
+
 	ctrStorages = append(ctrStorages, volumeStorages...)
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling grpc.OCItoGRPC")
 	grpcSpec, err := grpc.OCItoGRPC(ociSpec)
 	if err != nil {
 		k.Logger().Errorf("OCItoGRPC: ociSpec = %v, grpcSpec = %v, err = %v",
 			ociSpec, grpcSpec, err)
 		return nil, err
 	}
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called grpc.OCItoGRPC")
 
 	// We need to give the OCI spec our absolute rootfs path in the guest.
 	grpcSpec.Root.Path = rootPath
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling k.handlePidNamespace")
 	sharedPidNs := k.handlePidNamespace(grpcSpec, sandbox)
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called k.handlePidNamespace")
 
 	if !sandbox.config.DisableGuestSeccomp && !sandbox.seccompSupported {
 		return nil, fmt.Errorf("Seccomp profiles are passed to the virtual machine, but the Kata agent does not support seccomp")
@@ -1435,7 +1465,9 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// We need to constrain the spec to make sure we're not
 	// passing irrelevant information to the agent.
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling k.constrainGRPCSpec")
 	k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.VfioMode == config.VFIOModeGuestKernel)
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called k.constrainGRPCSpec")
 
 	req := &grpc.CreateContainerRequest{
 		ContainerId:  c.id,
@@ -1446,12 +1478,22 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		SandboxPidns: sharedPidNs,
 	}
 
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): request: %+v", req)
+
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling k.sendReq")
 	if _, err = k.sendReq(ctx, req); err != nil {
 		k.Logger().Errorf("sendReq: ctx = %v, req = %v, err = %v", ctx, req, err)
 		return nil, err
 	}
 
-	return buildProcessFromExecID(req.ExecId)
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called k.sendReq")
+
+	//return buildProcessFromExecID(req.ExecId)
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): calling buildProcessFromExecID")
+	proc, err := buildProcessFromExecID(req.ExecId)
+	k.Logger().Debugf("FIXME: kataAgent.createContainer(): called buildProcessFromExecID")
+
+	return proc, err
 }
 
 func buildProcessFromExecID(token string) (*Process, error) {
